@@ -1,0 +1,22 @@
+# ==============================
+# QueryLens — Phase 1
+# Python 3.13
+# ==============================
+
+# Distributed data processing
+pyspark==4.2.0
+py4j==0.10.9.9
+
+# SQL parsing / normalization
+sqlglot==27.14.0
+
+# Local SQL execution / validation
+duckdb==1.4.0
+
+# DataFrames / columnar data
+pandas==2.3.2
+polars==1.33.1
+pyarrow==21.0.0
+
+# Testing
+pytest==8.4.1

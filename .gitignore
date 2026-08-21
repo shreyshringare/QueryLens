@@ -1,0 +1,49 @@
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+__pypackages__/
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Testing & Coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.coverage
+htmlcov/
+.coverage.*
+
+# Generated Databases & Temp Files
+*.duckdb
+*.duckdb.wal
+*.sqlite
+*.db
+
+# PySpark & Hadoop Artifacts
+spark-warehouse/
+metastore_db/
+derby.log
+*.lck
+
+# Build & Packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# IDEs & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS Generated Files
+.DS_Store
+Thumbs.db

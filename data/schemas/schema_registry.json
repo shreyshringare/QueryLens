@@ -1,0 +1,10 @@
+{
+    "ecommerce": {
+        "ddl_path": "data/raw/synthetic/ecommerce/schema.sql",
+        "database_path": "data/raw/synthetic/ecommerce/database.duckdb",
+        "domain": "ecommerce",
+        "dialect": "duckdb",
+        "n_tables": 4,
+        "complexity": "medium"
+    }
+}

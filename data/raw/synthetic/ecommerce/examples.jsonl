@@ -1,0 +1,6 @@
+{"example_id":"ecom_001","question":"Which customers are from India?","sql":"SELECT customer_id, name FROM customers WHERE country = 'India'"}
+{"example_id":"ecom_002","question":"What is the average product price?","sql":"SELECT AVG(price) AS average_price FROM products"}
+{"example_id":"ecom_003","question":"Which products cost more than 100 dollars?","sql":"SELECT name, price FROM products WHERE price > 100"}
+{"example_id":"ecom_004","question":"How many orders has each customer placed?","sql":"SELECT customer_id, COUNT(*) AS order_count FROM orders GROUP BY customer_id"}
+{"example_id":"ecom_005","question":"Which customers have spent more than 500 dollars?","sql":"SELECT o.customer_id, SUM(oi.quantity * p.price) AS total_spent FROM orders o JOIN order_items oi ON o.order_id = oi.order_id JOIN products p ON oi.product_id = p.product_id GROUP BY o.customer_id HAVING SUM(oi.quantity * p.price) > 500"}
+{"example_id":"ecom_006","question":"Which products have never been ordered?","sql":"SELECT p.product_id, p.name FROM products p LEFT JOIN order_items oi ON p.product_id = oi.product_id WHERE oi.product_id IS NULL"}
