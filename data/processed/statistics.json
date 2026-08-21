@@ -1,0 +1,13 @@
+{
+    "total": 6,
+    "sources": {
+        "synthetic": 6
+    },
+    "domains": {
+        "general": 6
+    },
+    "dialects": {
+        "duckdb": 6
+    },
+    "databases": 1
+}

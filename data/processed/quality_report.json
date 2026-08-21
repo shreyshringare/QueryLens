@@ -1,0 +1,9 @@
+{
+    "total_records": 6,
+    "valid_records": 6,
+    "invalid_records": 0,
+    "duplicates_removed": 0,
+    "missing_ddl": 0,
+    "missing_sql": 0,
+    "missing_question": 0
+}
