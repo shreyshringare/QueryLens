@@ -136,3 +136,19 @@ def test_sql_schema_validator_flags_unknown_column():
     errors = validator.validate(structure)
 
     assert errors == ["Unknown column: customers.customer_name"]
+
+
+def test_sql_schema_validator_column_lookup_is_case_insensitive():
+
+    schema = _build_shop_schema()
+
+    structure = SQLStructure(
+        tables=["customers"],
+        select_columns=[ColumnReference(table="customers", column="NAME")],
+    )
+
+    validator = SQLSchemaValidator(schema)
+
+    errors = validator.validate(structure)
+
+    assert errors == []

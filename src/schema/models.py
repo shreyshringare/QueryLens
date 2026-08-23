@@ -23,7 +23,7 @@ class Table:
     
     def get_column(self,name:str) -> Column:
         for column in self.columns:
-            if column.name == name:
+            if column.name.lower() == name.lower():
                 return column
             
         raise ValueError(f"Column '{name}' not found in table '{self.name}'")
