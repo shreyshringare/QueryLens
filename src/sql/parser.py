@@ -1,7 +1,7 @@
 import sqlglot
 from sqlglot import expressions as exp
 
-from .models import SQLStructure
+from .models import SQLStructure, ColumnReference
 
 
 class SQLParser:
@@ -15,6 +15,7 @@ class SQLParser:
         result = SQLStructure()
 
         self._extract_tables(expression, result)
+        self._extract_columns(expression, result)
 
         return result
 
@@ -26,3 +27,14 @@ class SQLParser:
 
             if name not in result.tables:
                 result.tables.append(name)
+
+    def _extract_columns(self, expression, result):
+
+        for column in expression.find_all(exp.Column):
+
+            result.select_columns.append(
+                ColumnReference(
+                    table=column.table or None,
+                    column=column.name,
+                )
+            )

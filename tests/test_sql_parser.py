@@ -74,3 +74,20 @@ def test_extract_tables_deduplicates():
     result = parser.parse(sql)
 
     assert result.tables == ["customers"]
+
+
+def test_extract_columns():
+
+    sql = """
+    SELECT c.name, o.order_id
+    FROM customers c
+    JOIN orders o
+        ON c.customer_id = o.customer_id
+    """
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert ColumnReference(table="c", column="name") in result.select_columns
+    assert ColumnReference(table="o", column="order_id") in result.select_columns
