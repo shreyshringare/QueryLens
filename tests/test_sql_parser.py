@@ -35,3 +35,7 @@ def test_sql_structure_holds_values():
     assert structure.select_columns == [ref]
     assert structure.tables == ["customers"]
     assert structure.limit == 10
+
+
+def test_sql_package_exports():
+    from src.sql import ColumnReference, SQLStructure  # noqa: F401
