@@ -58,3 +58,19 @@ def test_extract_tables():
     result = parser.parse(sql)
 
     assert result.tables == ["customers", "orders"]
+
+
+def test_extract_tables_deduplicates():
+
+    sql = """
+    SELECT *
+    FROM customers c1
+    JOIN customers c2
+        ON c1.customer_id = c2.customer_id
+    """
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert result.tables == ["customers"]
