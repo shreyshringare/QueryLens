@@ -380,3 +380,17 @@ def test_extract_limit_fetch_first_syntax_not_captured():
     result = parser.parse(sql)
 
     assert result.limit is None
+
+
+from src.sql.aliases import AliasResolver
+
+
+def test_alias_resolver():
+
+    resolver = AliasResolver()
+    resolver.add("c", "customers")
+    resolver.add("o", "orders")
+
+    assert resolver.resolve("c") == "customers"
+    assert resolver.resolve("o") == "orders"
+    assert resolver.resolve("customers") == "customers"  # unknown key -> passthrough
