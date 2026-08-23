@@ -134,3 +134,71 @@ def test_extract_joins_left_join_type():
 
     assert len(result.joins) == 1
     assert result.joins[0].join_type == "LEFT"
+
+
+def test_extract_filters():
+
+    sql = """
+    SELECT *
+    FROM orders o
+    WHERE o.amount > 1000
+      AND o.status = 'shipped'
+    """
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert len(result.filters) == 2
+
+    operators = {f.operator for f in result.filters}
+    assert operators == {"GT", "EQ"}
+
+    amount_filter = next(f for f in result.filters if f.operator == "GT")
+    assert amount_filter.column == ColumnReference(table="o", column="amount")
+
+
+def test_extract_filters_like_predicate():
+
+    sql = """
+    SELECT *
+    FROM customers c
+    WHERE c.name LIKE 'A%'
+    """
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert len(result.filters) == 1
+    assert result.filters[0].operator == "LIKE"
+    assert result.filters[0].column == ColumnReference(table="c", column="name")
+
+
+def test_extract_filters_no_where_clause():
+
+    sql = """
+    SELECT *
+    FROM customers c
+    """
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert result.filters == []
+
+
+def test_extract_filters_bare_column_no_spurious_filter():
+
+    sql = """
+    SELECT *
+    FROM customers c
+    WHERE c.is_active
+    """
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert result.filters == []

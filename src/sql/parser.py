@@ -1,7 +1,7 @@
 import sqlglot
 from sqlglot import expressions as exp
 
-from .models import SQLStructure, ColumnReference, Join
+from .models import SQLStructure, ColumnReference, Join, Filter
 
 
 class SQLParser:
@@ -17,6 +17,7 @@ class SQLParser:
         self._extract_tables(expression, result)
         self._extract_columns(expression, result)
         self._extract_joins(expression, result)
+        self._extract_filters(expression, result)
 
         return result
 
@@ -73,5 +74,32 @@ class SQLParser:
                     table=table.name,
                     left=ColumnReference(table=left.table or None, column=left.name),
                     right=ColumnReference(table=right.table or None, column=right.name),
+                )
+            )
+
+    def _extract_filters(self, expression, result):
+
+        where = expression.args.get("where")
+
+        if where is None:
+            return
+
+        # exp.Predicate matches only real comparison ops (EQ, GT, Like, In, ...).
+        # A plain exp.Condition would also match bare Column/Literal nodes,
+        # since those are Condition subclasses too in sqlglot 27.x.
+        for predicate in where.find_all(exp.Predicate):
+
+            columns = list(predicate.find_all(exp.Column))
+
+            if not columns:
+                continue
+
+            column = columns[0]
+
+            result.filters.append(
+                Filter(
+                    column=ColumnReference(table=column.table or None, column=column.name),
+                    operator=predicate.key.upper(),
+                    value=predicate.sql(),
                 )
             )
