@@ -39,3 +39,22 @@ def test_sql_structure_holds_values():
 
 def test_sql_package_exports():
     from src.sql import ColumnReference, SQLStructure  # noqa: F401
+
+
+from src.sql.parser import SQLParser
+
+
+def test_extract_tables():
+
+    sql = """
+    SELECT *
+    FROM customers c
+    JOIN orders o
+        ON c.customer_id = o.customer_id
+    """
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert result.tables == ["customers", "orders"]
