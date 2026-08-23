@@ -269,3 +269,28 @@ def test_extract_group_by():
     result = parser.parse(sql)
 
     assert result.group_by == [ColumnReference(table="c", column="name")]
+
+
+def test_extract_group_by_absent():
+
+    sql = "SELECT * FROM orders o"
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert result.group_by == []
+
+
+def test_extract_group_by_multiple_columns():
+
+    sql = "SELECT c.name, c.email, COUNT(*) FROM customers c GROUP BY c.name, c.email"
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert result.group_by == [
+        ColumnReference(table="c", column="name"),
+        ColumnReference(table="c", column="email"),
+    ]
