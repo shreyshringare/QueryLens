@@ -94,3 +94,25 @@ def test_extract_columns():
     assert ColumnReference(table="o", column="order_id") in result.select_columns
     assert ColumnReference(table="c", column="customer_id") in result.select_columns
     assert ColumnReference(table="o", column="customer_id") in result.select_columns
+
+
+def test_extract_joins():
+
+    sql = """
+    SELECT *
+    FROM customers c
+    JOIN orders o
+        ON c.customer_id = o.customer_id
+    """
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert len(result.joins) == 1
+
+    join = result.joins[0]
+
+    assert join.table == "orders"
+    assert join.left == ColumnReference(table="c", column="customer_id")
+    assert join.right == ColumnReference(table="o", column="customer_id")

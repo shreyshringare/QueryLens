@@ -1,7 +1,7 @@
 import sqlglot
 from sqlglot import expressions as exp
 
-from .models import SQLStructure, ColumnReference
+from .models import SQLStructure, ColumnReference, Join
 
 
 class SQLParser:
@@ -16,6 +16,7 @@ class SQLParser:
 
         self._extract_tables(expression, result)
         self._extract_columns(expression, result)
+        self._extract_joins(expression, result)
 
         return result
 
@@ -36,5 +37,35 @@ class SQLParser:
                 ColumnReference(
                     table=column.table or None,
                     column=column.name,
+                )
+            )
+
+    def _extract_joins(self, expression, result):
+
+        for join in expression.find_all(exp.Join):
+
+            table = join.this
+
+            if not isinstance(table, exp.Table):
+                continue
+
+            condition = join.args.get("on")
+
+            if condition is None:
+                continue
+
+            columns = list(condition.find_all(exp.Column))
+
+            if len(columns) < 2:
+                continue
+
+            left, right = columns[0], columns[1]
+
+            result.joins.append(
+                Join(
+                    join_type=join.args.get("kind") or "JOIN",
+                    table=table.name,
+                    left=ColumnReference(table=left.table or None, column=left.name),
+                    right=ColumnReference(table=right.table or None, column=right.name),
                 )
             )
