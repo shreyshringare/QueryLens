@@ -47,4 +47,7 @@ class DatabaseSchema:
         table = self.get_table(table_name)
         if table is None:
             return False
-        return table.get_column(column_name) is not None
+        try:
+            return table.get_column(column_name) is not None
+        except ValueError:
+            return False
