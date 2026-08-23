@@ -89,5 +89,8 @@ def test_extract_columns():
 
     result = parser.parse(sql)
 
+    assert len(result.select_columns) == 4
     assert ColumnReference(table="c", column="name") in result.select_columns
     assert ColumnReference(table="o", column="order_id") in result.select_columns
+    assert ColumnReference(table="c", column="customer_id") in result.select_columns
+    assert ColumnReference(table="o", column="customer_id") in result.select_columns
