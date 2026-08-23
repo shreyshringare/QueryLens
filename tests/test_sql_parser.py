@@ -232,3 +232,29 @@ def test_extract_aggregations():
 
     count_agg = next(a for a in result.aggregations if a.function == "COUNT")
     assert count_agg.column == ColumnReference(table="o", column="order_id")
+
+
+def test_extract_aggregations_count_star():
+
+    sql = "SELECT COUNT(*) FROM orders o"
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert len(result.aggregations) == 1
+    assert result.aggregations[0].function == "COUNT"
+    assert result.aggregations[0].column is None
+
+
+def test_extract_aggregations_window_function_included():
+
+    sql = "SELECT SUM(o.amount) OVER (PARTITION BY o.customer_id) FROM orders o"
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert len(result.aggregations) == 1
+    assert result.aggregations[0].function == "SUM"
+    assert result.aggregations[0].column == ColumnReference(table="o", column="amount")

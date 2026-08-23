@@ -120,14 +120,15 @@ class SQLParser:
             )
 
     def _extract_aggregations(self, expression, result):
-        # Known limitation: exp.AggFunc matches aggregate calls anywhere in the
-        # tree, including ones nested inside a window function (e.g.
-        # "SUM(o.amount) OVER (PARTITION BY o.customer_id)"), so such window
-        # aggregations are captured here too even though they don't reduce rows
-        # the way a GROUP BY aggregate does. The PARTITION BY / ORDER BY columns
-        # of the window itself are siblings of the AggFunc node, not children of
-        # it, so they aren't swept into `column` — only the function's own
-        # argument column(s) are.
+        # Known limitations: only the first Column found inside the aggregate's
+        # argument is captured (e.g. "SUM(o.amount + o.tax)" only records
+        # o.amount, silently dropping o.tax — same columns[0] tradeoff as
+        # _extract_joins/_extract_filters). Window-function aggregates
+        # (e.g. "SUM(x) OVER (PARTITION BY ...)") are also swept in here
+        # indistinguishably from reducing aggregates — the PARTITION BY/ORDER
+        # BY columns themselves are NOT captured (they're siblings of the
+        # AggFunc node, not descendants), but the aggregate itself is still
+        # recorded as if it were a regular GROUP BY-style aggregate.
 
         for node in expression.find_all(exp.AggFunc):
 
