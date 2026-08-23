@@ -21,6 +21,7 @@ class SQLParser:
         self._extract_aggregations(expression, result)
         self._extract_group_by(expression, result)
         self._extract_order_by(expression, result)
+        self._extract_limit(expression, result)
 
         return result
 
@@ -185,3 +186,23 @@ class SQLParser:
             result.order_by.append(
                 OrderBy(expression=item.this.sql(), direction=direction)
             )
+
+    def _extract_limit(self, expression, result):
+        # Known limitation: OFFSET-style pagination (e.g. Oracle's
+        # "FETCH FIRST n ROWS ONLY") is parsed by sqlglot into an exp.Fetch
+        # node under the same "limit" arg key rather than exp.Limit, and
+        # exp.Fetch has no `.expression` (it uses `.args["count"]` instead),
+        # so `limit.expression.this` raises AttributeError there — that's
+        # exactly what the except clause below guards against. Not an issue
+        # for the dialects this pipeline targets (postgres/mysql/sqlite/
+        # duckdb), which all use plain LIMIT and populate exp.Limit.
+
+        limit = expression.args.get("limit")
+
+        if limit is None:
+            return
+
+        try:
+            result.limit = int(limit.expression.this)
+        except (TypeError, ValueError, AttributeError):
+            result.limit = None

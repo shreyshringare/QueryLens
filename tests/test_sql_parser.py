@@ -347,3 +347,25 @@ def test_extract_order_by_multiple_items_independent_directions():
     assert "amount" in result.order_by[0].expression
     assert result.order_by[1].direction == "DESC"
     assert "created_at" in result.order_by[1].expression
+
+
+def test_extract_limit():
+
+    sql = "SELECT * FROM orders o LIMIT 10"
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert result.limit == 10
+
+
+def test_extract_limit_absent():
+
+    sql = "SELECT * FROM orders o"
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert result.limit is None
