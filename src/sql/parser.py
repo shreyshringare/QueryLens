@@ -190,12 +190,13 @@ class SQLParser:
     def _extract_limit(self, expression, result):
         # Known limitation: OFFSET-style pagination (e.g. Oracle's
         # "FETCH FIRST n ROWS ONLY") is parsed by sqlglot into an exp.Fetch
-        # node under the same "limit" arg key rather than exp.Limit, and
-        # exp.Fetch has no `.expression` (it uses `.args["count"]` instead),
-        # so `limit.expression.this` raises AttributeError there — that's
-        # exactly what the except clause below guards against. Not an issue
-        # for the dialects this pipeline targets (postgres/mysql/sqlite/
-        # duckdb), which all use plain LIMIT and populate exp.Limit.
+        # node under the same "limit" arg key rather than exp.Limit.
+        # exp.Fetch's `.expression` property returns None (it stores its
+        # count under a different key, "count"), so `.expression.this`
+        # raises AttributeError on the None — that's exactly what the
+        # except clause below guards against. Not an issue for the dialects
+        # this pipeline targets (postgres/mysql/sqlite/duckdb), which all
+        # use plain LIMIT and populate exp.Limit.
 
         limit = expression.args.get("limit")
 

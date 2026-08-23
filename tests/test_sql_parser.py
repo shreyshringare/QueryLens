@@ -369,3 +369,14 @@ def test_extract_limit_absent():
     result = parser.parse(sql)
 
     assert result.limit is None
+
+
+def test_extract_limit_fetch_first_syntax_not_captured():
+
+    sql = "SELECT * FROM orders FETCH FIRST 10 ROWS ONLY"
+
+    parser = SQLParser(dialect="oracle")
+
+    result = parser.parse(sql)
+
+    assert result.limit is None
