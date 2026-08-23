@@ -41,6 +41,10 @@ class SQLParser:
             )
 
     def _extract_joins(self, expression, result):
+        # Known limitations: only the first column pair in a multi-column ON
+        # condition is captured (e.g. "ON a.x = b.x AND a.y = b.y" loses the
+        # second pair), and JOIN ... USING (...) produces no ON condition so
+        # such joins are silently skipped entirely.
 
         for join in expression.find_all(exp.Join):
 
@@ -63,7 +67,9 @@ class SQLParser:
 
             result.joins.append(
                 Join(
-                    join_type=join.args.get("kind") or "JOIN",
+                    join_type=" ".join(
+                        part for part in (join.args.get("side"), join.args.get("kind")) if part
+                    ) or "JOIN",
                     table=table.name,
                     left=ColumnReference(table=left.table or None, column=left.name),
                     right=ColumnReference(table=right.table or None, column=right.name),

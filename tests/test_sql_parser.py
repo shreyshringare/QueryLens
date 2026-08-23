@@ -114,5 +114,23 @@ def test_extract_joins():
     join = result.joins[0]
 
     assert join.table == "orders"
+    assert join.join_type == "JOIN"
     assert join.left == ColumnReference(table="c", column="customer_id")
     assert join.right == ColumnReference(table="o", column="customer_id")
+
+
+def test_extract_joins_left_join_type():
+
+    sql = """
+    SELECT *
+    FROM customers c
+    LEFT JOIN orders o
+        ON c.customer_id = o.customer_id
+    """
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert len(result.joins) == 1
+    assert result.joins[0].join_type == "LEFT"
