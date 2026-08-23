@@ -1,7 +1,7 @@
 import sqlglot
 from sqlglot import expressions as exp
 
-from .models import SQLStructure, ColumnReference, Join, Filter
+from .models import SQLStructure, ColumnReference, Join, Filter, Aggregation
 
 
 class SQLParser:
@@ -18,6 +18,7 @@ class SQLParser:
         self._extract_columns(expression, result)
         self._extract_joins(expression, result)
         self._extract_filters(expression, result)
+        self._extract_aggregations(expression, result)
 
         return result
 
@@ -116,4 +117,27 @@ class SQLParser:
                     operator=operator,
                     value=value,
                 )
+            )
+
+    def _extract_aggregations(self, expression, result):
+        # Known limitation: exp.AggFunc matches aggregate calls anywhere in the
+        # tree, including ones nested inside a window function (e.g.
+        # "SUM(o.amount) OVER (PARTITION BY o.customer_id)"), so such window
+        # aggregations are captured here too even though they don't reduce rows
+        # the way a GROUP BY aggregate does. The PARTITION BY / ORDER BY columns
+        # of the window itself are siblings of the AggFunc node, not children of
+        # it, so they aren't swept into `column` — only the function's own
+        # argument column(s) are.
+
+        for node in expression.find_all(exp.AggFunc):
+
+            columns = list(node.find_all(exp.Column))
+
+            column = None
+            if columns:
+                first = columns[0]
+                column = ColumnReference(table=first.table or None, column=first.name)
+
+            result.aggregations.append(
+                Aggregation(function=node.sql_name().upper(), column=column)
             )

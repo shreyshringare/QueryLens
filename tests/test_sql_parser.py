@@ -215,3 +215,20 @@ def test_extract_filters_negated_predicate_not_inverted():
     assert len(result.filters) == 1
     assert result.filters[0].operator == "NOT IS"
     assert "NOT" in result.filters[0].value
+
+
+def test_extract_aggregations():
+
+    sql = "SELECT COUNT(o.order_id), SUM(o.amount) FROM orders o"
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert len(result.aggregations) == 2
+
+    functions = {a.function for a in result.aggregations}
+    assert functions == {"COUNT", "SUM"}
+
+    count_agg = next(a for a in result.aggregations if a.function == "COUNT")
+    assert count_agg.column == ColumnReference(table="o", column="order_id")
