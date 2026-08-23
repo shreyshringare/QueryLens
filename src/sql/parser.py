@@ -2,6 +2,7 @@ import sqlglot
 from sqlglot import expressions as exp
 
 from .models import SQLStructure, ColumnReference, Join, Filter, Aggregation, OrderBy
+from .aliases import AliasResolver
 
 
 class SQLParser:
@@ -22,6 +23,7 @@ class SQLParser:
         self._extract_group_by(expression, result)
         self._extract_order_by(expression, result)
         self._extract_limit(expression, result)
+        self._resolve_aliases(expression, result)
 
         return result
 
@@ -207,3 +209,36 @@ class SQLParser:
             result.limit = int(limit.expression.this)
         except (TypeError, ValueError, AttributeError):
             result.limit = None
+
+    def _resolve_aliases(self, expression, result):
+        # Resolves raw alias strings captured in ColumnReference.table (e.g. "c")
+        # to the real underlying table name (e.g. "customers"), across every
+        # extractor's output. result.tables is untouched — _extract_tables
+        # already stores real names (table.name), never aliases.
+
+        resolver = AliasResolver()
+
+        for table in expression.find_all(exp.Table):
+            resolver.add(table.alias_or_name, table.name)
+
+        for ref in result.select_columns:
+            if ref.table is not None:
+                ref.table = resolver.resolve(ref.table)
+
+        for ref in result.group_by:
+            if ref.table is not None:
+                ref.table = resolver.resolve(ref.table)
+
+        for f in result.filters:
+            if f.column.table is not None:
+                f.column.table = resolver.resolve(f.column.table)
+
+        for agg in result.aggregations:
+            if agg.column is not None and agg.column.table is not None:
+                agg.column.table = resolver.resolve(agg.column.table)
+
+        for join in result.joins:
+            if join.left.table is not None:
+                join.left.table = resolver.resolve(join.left.table)
+            if join.right.table is not None:
+                join.right.table = resolver.resolve(join.right.table)

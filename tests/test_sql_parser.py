@@ -90,10 +90,10 @@ def test_extract_columns():
     result = parser.parse(sql)
 
     assert len(result.select_columns) == 4
-    assert ColumnReference(table="c", column="name") in result.select_columns
-    assert ColumnReference(table="o", column="order_id") in result.select_columns
-    assert ColumnReference(table="c", column="customer_id") in result.select_columns
-    assert ColumnReference(table="o", column="customer_id") in result.select_columns
+    assert ColumnReference(table="customers", column="name") in result.select_columns
+    assert ColumnReference(table="orders", column="order_id") in result.select_columns
+    assert ColumnReference(table="customers", column="customer_id") in result.select_columns
+    assert ColumnReference(table="orders", column="customer_id") in result.select_columns
 
 
 def test_extract_joins():
@@ -115,8 +115,8 @@ def test_extract_joins():
 
     assert join.table == "orders"
     assert join.join_type == "JOIN"
-    assert join.left == ColumnReference(table="c", column="customer_id")
-    assert join.right == ColumnReference(table="o", column="customer_id")
+    assert join.left == ColumnReference(table="customers", column="customer_id")
+    assert join.right == ColumnReference(table="orders", column="customer_id")
 
 
 def test_extract_joins_left_join_type():
@@ -155,7 +155,7 @@ def test_extract_filters():
     assert operators == {"GT", "EQ"}
 
     amount_filter = next(f for f in result.filters if f.operator == "GT")
-    assert amount_filter.column == ColumnReference(table="o", column="amount")
+    assert amount_filter.column == ColumnReference(table="orders", column="amount")
 
 
 def test_extract_filters_like_predicate():
@@ -172,7 +172,7 @@ def test_extract_filters_like_predicate():
 
     assert len(result.filters) == 1
     assert result.filters[0].operator == "LIKE"
-    assert result.filters[0].column == ColumnReference(table="c", column="name")
+    assert result.filters[0].column == ColumnReference(table="customers", column="name")
 
 
 def test_extract_filters_no_where_clause():
@@ -231,7 +231,7 @@ def test_extract_aggregations():
     assert functions == {"COUNT", "SUM"}
 
     count_agg = next(a for a in result.aggregations if a.function == "COUNT")
-    assert count_agg.column == ColumnReference(table="o", column="order_id")
+    assert count_agg.column == ColumnReference(table="orders", column="order_id")
 
 
 def test_extract_aggregations_count_star():
@@ -257,7 +257,7 @@ def test_extract_aggregations_window_function_included():
 
     assert len(result.aggregations) == 1
     assert result.aggregations[0].function == "SUM"
-    assert result.aggregations[0].column == ColumnReference(table="o", column="amount")
+    assert result.aggregations[0].column == ColumnReference(table="orders", column="amount")
 
 
 def test_extract_group_by():
@@ -268,7 +268,7 @@ def test_extract_group_by():
 
     result = parser.parse(sql)
 
-    assert result.group_by == [ColumnReference(table="c", column="name")]
+    assert result.group_by == [ColumnReference(table="customers", column="name")]
 
 
 def test_extract_group_by_absent():
@@ -291,8 +291,8 @@ def test_extract_group_by_multiple_columns():
     result = parser.parse(sql)
 
     assert result.group_by == [
-        ColumnReference(table="c", column="name"),
-        ColumnReference(table="c", column="email"),
+        ColumnReference(table="customers", column="name"),
+        ColumnReference(table="customers", column="email"),
     ]
 
 
@@ -394,3 +394,38 @@ def test_alias_resolver():
     assert resolver.resolve("c") == "customers"
     assert resolver.resolve("o") == "orders"
     assert resolver.resolve("customers") == "customers"  # unknown key -> passthrough
+
+
+def test_alias_resolution_in_parse():
+
+    sql = """
+    SELECT c.name, o.order_id
+    FROM customers c
+    JOIN orders o
+        ON c.customer_id = o.customer_id
+    GROUP BY c.name
+    """
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert ColumnReference(table="customers", column="name") in result.select_columns
+    assert ColumnReference(table="orders", column="order_id") in result.select_columns
+
+    join = result.joins[0]
+    assert join.left == ColumnReference(table="customers", column="customer_id")
+    assert join.right == ColumnReference(table="orders", column="customer_id")
+
+    assert result.group_by == [ColumnReference(table="customers", column="name")]
+
+
+def test_alias_resolution_no_alias_used():
+
+    sql = "SELECT customers.name FROM customers"
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert ColumnReference(table="customers", column="name") in result.select_columns
