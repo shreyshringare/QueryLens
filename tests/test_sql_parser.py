@@ -429,3 +429,25 @@ def test_alias_resolution_no_alias_used():
     result = parser.parse(sql)
 
     assert ColumnReference(table="customers", column="name") in result.select_columns
+
+
+def test_alias_resolution_subquery_alias_collision_known_limitation():
+
+    sql = """
+    SELECT a.id, sub.y
+    FROM foo a
+    JOIN (SELECT bar.y AS y, a.id AS aid FROM bar a) sub
+        ON a.id = sub.aid
+    """
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    # Known limitation: outer "a" (foo) gets overwritten by the subquery's
+    # "a" (bar) in the flat resolver, so a.id incorrectly resolves to bar,
+    # not foo. This test documents current behavior, not correct behavior —
+    # if scope-aware resolution is ever added, this test should be updated
+    # to assert table="foo" instead.
+    id_ref = next(r for r in result.select_columns if r.column == "id")
+    assert id_ref.table == "bar"

@@ -215,6 +215,16 @@ class SQLParser:
         # to the real underlying table name (e.g. "customers"), across every
         # extractor's output. result.tables is untouched — _extract_tables
         # already stores real names (table.name), never aliases.
+        #
+        # Known limitation: this builds one flat alias->table map across the
+        # WHOLE expression tree, including subqueries, rather than resolving
+        # per-scope. If an alias letter is reused in a subquery (e.g. both
+        # the outer query and a subquery alias a table as "a"), the map entry
+        # is silently overwritten and outer-scope columns can resolve to the
+        # wrong table. This mirrors the flat, scope-unaware traversal already
+        # used by every extractor above (_extract_tables/_extract_columns/etc.
+        # all flatten across subquery boundaries too) — a proper fix would
+        # need scope-aware traversal throughout the class, not just here.
 
         resolver = AliasResolver()
 
