@@ -1,7 +1,7 @@
 import sqlglot
 from sqlglot import expressions as exp
 
-from .models import SQLStructure, ColumnReference, Join, Filter, Aggregation
+from .models import SQLStructure, ColumnReference, Join, Filter, Aggregation, OrderBy
 
 
 class SQLParser:
@@ -20,6 +20,7 @@ class SQLParser:
         self._extract_filters(expression, result)
         self._extract_aggregations(expression, result)
         self._extract_group_by(expression, result)
+        self._extract_order_by(expression, result)
 
         return result
 
@@ -164,3 +165,23 @@ class SQLParser:
                 result.group_by.append(
                     ColumnReference(table=column.table or None, column=column.name)
                 )
+
+    def _extract_order_by(self, expression, result):
+        # Known limitation: NULLS FIRST/NULLS LAST is parsed by sqlglot into a
+        # separate `nulls_first` arg on each Ordered node, independent of
+        # `desc`, so the direction extraction below is unaffected by it — but
+        # that information itself is silently discarded since OrderBy has no
+        # field for it.
+
+        order = expression.args.get("order")
+
+        if order is None:
+            return
+
+        for item in order.expressions:
+
+            direction = "DESC" if item.args.get("desc") else "ASC"
+
+            result.order_by.append(
+                OrderBy(expression=item.this.sql(), direction=direction)
+            )

@@ -294,3 +294,56 @@ def test_extract_group_by_multiple_columns():
         ColumnReference(table="c", column="name"),
         ColumnReference(table="c", column="email"),
     ]
+
+
+def test_extract_order_by():
+
+    sql = "SELECT * FROM orders o ORDER BY o.amount DESC"
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert len(result.order_by) == 1
+    assert result.order_by[0].direction == "DESC"
+    assert "amount" in result.order_by[0].expression
+
+
+def test_extract_order_by_default_ascending():
+
+    sql = "SELECT * FROM orders o ORDER BY o.amount"
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert len(result.order_by) == 1
+    assert result.order_by[0].direction == "ASC"
+
+
+def test_extract_order_by_aggregate_expression():
+
+    sql = "SELECT COUNT(o.id) FROM orders o ORDER BY COUNT(o.id) DESC"
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert len(result.order_by) == 1
+    assert result.order_by[0].direction == "DESC"
+    assert result.order_by[0].expression == "COUNT(o.id)"
+
+
+def test_extract_order_by_multiple_items_independent_directions():
+
+    sql = "SELECT * FROM orders o ORDER BY o.amount, o.created_at DESC"
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert len(result.order_by) == 2
+    assert result.order_by[0].direction == "ASC"
+    assert "amount" in result.order_by[0].expression
+    assert result.order_by[1].direction == "DESC"
+    assert "created_at" in result.order_by[1].expression
