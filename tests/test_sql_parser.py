@@ -258,3 +258,14 @@ def test_extract_aggregations_window_function_included():
     assert len(result.aggregations) == 1
     assert result.aggregations[0].function == "SUM"
     assert result.aggregations[0].column == ColumnReference(table="o", column="amount")
+
+
+def test_extract_group_by():
+
+    sql = "SELECT c.name, COUNT(*) FROM customers c GROUP BY c.name"
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert result.group_by == [ColumnReference(table="c", column="name")]

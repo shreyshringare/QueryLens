@@ -19,6 +19,7 @@ class SQLParser:
         self._extract_joins(expression, result)
         self._extract_filters(expression, result)
         self._extract_aggregations(expression, result)
+        self._extract_group_by(expression, result)
 
         return result
 
@@ -142,3 +143,24 @@ class SQLParser:
             result.aggregations.append(
                 Aggregation(function=node.sql_name().upper(), column=column)
             )
+
+    def _extract_group_by(self, expression, result):
+        # Known limitation: GROUP BY ROLLUP(...)/CUBE(...)/GROUPING SETS (...)
+        # store their columns under separate Group args ("rollup", "cube",
+        # "grouping_sets") rather than in group.expressions, so those variants
+        # are silently skipped here — group_by comes back empty for them.
+        # Ordinal GROUP BY (e.g. "GROUP BY 1") is also a no-op by design: the
+        # item is a bare Literal with no Column descendants to find.
+
+        group = expression.args.get("group")
+
+        if group is None:
+            return
+
+        for item in group.expressions:
+
+            for column in item.find_all(exp.Column):
+
+                result.group_by.append(
+                    ColumnReference(table=column.table or None, column=column.name)
+                )
