@@ -87,6 +87,12 @@ class SQLParser:
         # exp.Predicate matches only real comparison ops (EQ, GT, Like, In, ...).
         # A plain exp.Condition would also match bare Column/Literal nodes,
         # since those are Condition subclasses too in sqlglot 27.x.
+        #
+        # Known limitation: only the first column found in a predicate is
+        # recorded in the structured `column` field, so column-to-column
+        # comparisons (e.g. "o.a = o.b") or predicates where both sides
+        # reference columns (e.g. "BETWEEN o.min_amt AND o.max_amt") only
+        # capture one side there — the full text is still preserved in `value`.
         for predicate in where.find_all(exp.Predicate):
 
             columns = list(predicate.find_all(exp.Column))
@@ -96,10 +102,18 @@ class SQLParser:
 
             column = columns[0]
 
+            negated = isinstance(predicate.parent, exp.Not)
+            operator = predicate.key.upper()
+            value = predicate.sql()
+
+            if negated:
+                operator = f"NOT {operator}"
+                value = predicate.parent.sql()
+
             result.filters.append(
                 Filter(
                     column=ColumnReference(table=column.table or None, column=column.name),
-                    operator=predicate.key.upper(),
-                    value=predicate.sql(),
+                    operator=operator,
+                    value=value,
                 )
             )

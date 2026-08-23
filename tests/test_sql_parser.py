@@ -202,3 +202,16 @@ def test_extract_filters_bare_column_no_spurious_filter():
     result = parser.parse(sql)
 
     assert result.filters == []
+
+
+def test_extract_filters_negated_predicate_not_inverted():
+
+    sql = "SELECT * FROM customers c WHERE c.email IS NOT NULL"
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert len(result.filters) == 1
+    assert result.filters[0].operator == "NOT IS"
+    assert "NOT" in result.filters[0].value
