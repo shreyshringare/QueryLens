@@ -4,6 +4,12 @@
 
 **Goal:** Parse ground-truth SQL into a structured `SQLStructure` representation, resolve table aliases against the already-built `DatabaseSchema`, validate SQL references against schema, and produce `data/structured/structured.jsonl` combining Phase-1 normalized records with parsed schema + SQL structure.
 
+**Post-plan follow-ups (found during the final whole-branch review after all 16 tasks completed):**
+- **Task 17 — CTE names treated as real tables:** `_extract_tables` matched every `exp.Table` node including CTE (`WITH x AS (...)`) references, causing `SQLSchemaValidator` to falsely flag `"Unknown table: x"` for any query using a CTE. Fixed by excluding CTE names via `expression.find_all(exp.CTE)`. A second-round review then found the naive fix had its own bug: a CTE that self-references a real table of the same name (`WITH orders AS (SELECT ... FROM orders ...) SELECT * FROM orders` — standard non-recursive SQL, the inner `orders` means the real table) caused the real table to be silently dropped from `result.tables` entirely (worse than the original bug — a silent false-negative instead of a loud false-positive). Fixed using `table.find_ancestor(exp.CTE)` to distinguish a genuine CTE reference from a same-named real-table self-reference inside the CTE's own body. A residual, documented-not-fixed gap remains: a *qualified* CTE column reference (`SELECT recent.customer_id FROM recent`) still produces a false positive, converted from an "Unknown table" error to an "Unknown column" error, since `_resolve_aliases` doesn't share `_extract_tables`'s `cte_names` set — fixing that would require passing CTE awareness into alias resolution too, out of scope for this fix.
+- **Task 18 — SQLSchemaValidator never wired into the pipeline:** the plan's stated Goal includes validating SQL against schema, but `transform_record()` in `scripts/build_structured_dataset.py` never called `SQLSchemaValidator` — it was built and tested in isolation (Task 13) but dead code from the shipped pipeline's perspective. Fixed by calling it and adding a `validation_errors` key to the output. Re-ran against all 6 real records — all show `validation_errors: []` (the dataset's ground-truth SQL is clean relative to its own DDL). Added a scope-limiting comment at the call site (only checks `.tables`/qualified `.select_columns`, not joins/filters/aggregations/group_by, silently skips unqualified columns) so downstream consumers of `structured.jsonl` don't over-trust an empty list.
+
+**Final state:** 18/18 tasks complete (16 planned + 2 follow-ups from final whole-branch review). Full suite: 143 passed, 0 failed.
+
 **Architecture:** `SQLParser` (sqlglot-based) extracts tables/columns/joins/filters/aggregations/group-by/order-by/limit into `SQLStructure`. An `AliasResolver` built from the same parse tree rewrites `c.name` → `customers.name` so results line up with `DatabaseSchema`. `SQLSchemaValidator` (added to the existing `src/schema/validator.py`) then flags unknown tables/columns. A pipeline script ties `SchemaParser` + `SQLParser` together over `data/processed/normalized.jsonl`.
 
 **Tech Stack:** Python 3.14 (project venv at `.venv`), sqlglot 27.14.0, pytest, dataclasses.
@@ -498,7 +504,9 @@ class SQLParser:
 
             result.joins.append(
                 Join(
-                    join_type=join.args.get("kind") or "JOIN",
+                    join_type=" ".join(
+                        part for part in (join.args.get("side"), join.args.get("kind")) if part
+                    ) or "JOIN",
                     table=table.name,
                     left=ColumnReference(table=left.table or None, column=left.name),
                     right=ColumnReference(table=right.table or None, column=right.name),
@@ -506,10 +514,12 @@ class SQLParser:
             )
 ```
 
+**Post-hoc correction (found during Task 5's code quality review, verified against sqlglot 27.14.0):** the original `join_type=join.args.get("kind") or "JOIN"` only reads sqlglot's `kind` arg (INNER/OUTER/CROSS), dropping the separate `side` arg (LEFT/RIGHT/FULL) entirely — `LEFT JOIN` was mislabeled `"JOIN"`, and `RIGHT OUTER JOIN`/`FULL OUTER JOIN` both collapsed to the indistinguishable `"OUTER"`. The snippet above combines both args. `_extract_joins` also has two known, intentionally-undocumented-until-now limitations: a multi-column `ON` condition (e.g. `ON a.x = b.x AND a.y = b.y`) only captures the first column pair, and `JOIN ... USING (...)` produces no `on` arg so such joins are silently skipped entirely — both are out of scope to fix (the `Join` model only supports one left/right pair) but should carry a comment in the code so nobody assumes completeness later.
+
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_sql_parser.py -v`
-Expected: PASS (6 tests)
+Expected: PASS (8 tests — includes a `LEFT JOIN` case asserting `join_type`, added during Task 5's review loop)
 
 - [ ] **Step 5: Commit**
 
@@ -643,6 +653,11 @@ class SQLParser:
 
         # exp.Predicate matches only real comparison ops (EQ, GT, Like, In, ...).
         # A plain exp.Condition would also match bare Column/Literal nodes.
+        # Known limitation: only the first Column found in a predicate is
+        # captured in the structured `column` field, so column-to-column
+        # comparisons (e.g. "WHERE o.a = o.b") or dual-column bounds (e.g.
+        # "BETWEEN o.min_amt AND o.max_amt") only record one side there —
+        # the full text is still preserved in `value`.
         for predicate in where.find_all(exp.Predicate):
 
             columns = list(predicate.find_all(exp.Column))
@@ -652,19 +667,29 @@ class SQLParser:
 
             column = columns[0]
 
+            negated = isinstance(predicate.parent, exp.Not)
+            operator = predicate.key.upper()
+            value = predicate.sql()
+
+            if negated:
+                operator = f"NOT {operator}"
+                value = predicate.parent.sql()
+
             result.filters.append(
                 Filter(
                     column=ColumnReference(table=column.table or None, column=column.name),
-                    operator=predicate.key.upper(),
-                    value=predicate.sql(),
+                    operator=operator,
+                    value=value,
                 )
             )
 ```
 
+**Post-hoc correction (found during Task 6's code quality review, verified against sqlglot 27.14.0):** the original snippet read `predicate.key`/`predicate.sql()` off the matched `Predicate` node only, never checking whether it was wrapped in `exp.Not` — so `c.email IS NOT NULL` was extracted as `operator="IS", value="c.email IS NULL"`, the exact opposite of what was written (same for `NOT LIKE`/`NOT IN`, negation silently dropped). The snippet above checks `predicate.parent` for `exp.Not` and prefixes the operator / uses the wrapper's `.sql()` when negated.
+
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_sql_parser.py -v`
-Expected: PASS (7 tests)
+Expected: PASS (13 tests — includes 3 extra coverage tests added during Task 6's review: LIKE predicate, no-WHERE-clause, bare-column-no-spurious-filter, plus a negation regression test from the fix above)
 
 - [ ] **Step 5: Commit**
 
@@ -734,6 +759,15 @@ from .models import SQLStructure, ColumnReference, Join, Filter, Aggregation
 
 ```python
     def _extract_aggregations(self, expression, result):
+        # Known limitations: only the first Column found inside the aggregate's
+        # argument is captured (e.g. "SUM(o.amount + o.tax)" only records
+        # o.amount, silently dropping o.tax — same columns[0] tradeoff as
+        # _extract_joins/_extract_filters). Window-function aggregates
+        # (e.g. "SUM(x) OVER (PARTITION BY ...)") are also swept in here
+        # indistinguishably from reducing aggregates — the PARTITION BY/ORDER
+        # BY columns themselves are NOT captured (siblings of the AggFunc
+        # node, not descendants), but the aggregate itself is still recorded
+        # as if it were a regular GROUP BY-style aggregate.
 
         for node in expression.find_all(exp.AggFunc):
 
@@ -749,7 +783,9 @@ from .models import SQLStructure, ColumnReference, Join, Filter, Aggregation
             )
 ```
 
-Full `src/sql/parser.py` after this step:
+**Post-hoc note (Task 7's code quality review):** the comment above was added after review flagged that the multi-column-argument limitation (mirroring `_extract_joins`/`_extract_filters`) wasn't documented, and that window-aggregate inclusion needed a regression test. No production logic changed — see `tests/test_sql_parser.py::test_extract_aggregations_count_star` and `::test_extract_aggregations_window_function_included`.
+
+Full `src/sql/parser.py` after this step (illustrative — predates the Task 5/6 post-hoc fixes noted above; the real file has those fixes applied):
 
 ```python
 # src/sql/parser.py
@@ -870,7 +906,7 @@ class SQLParser:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/test_sql_parser.py -v`
-Expected: PASS (8 tests)
+Expected: PASS (16 tests — includes `test_extract_aggregations_count_star` and `test_extract_aggregations_window_function_included`, added during Task 7's review to lock in documented-but-untested edge cases)
 
 - [ ] **Step 5: Commit**
 
@@ -882,6 +918,8 @@ git commit -m "feat(sql): extract aggregations in SQLParser"
 ---
 
 ### Task 8: SQLParser — GROUP BY extraction
+
+**Post-hoc note (Task 8's code quality review):** implementer proactively documented (not fixed) a real gap — `GROUP BY ROLLUP(...)/CUBE(...)/GROUPING SETS (...)` produce an empty `group.expressions`, so those columns are silently dropped from `result.group_by`. Verified correct by review. Two follow-up tests were added: `test_extract_group_by_absent` (no GROUP BY clause) and `test_extract_group_by_multiple_columns`.
 
 **Files:**
 - Modify: `src/sql/parser.py`
@@ -1028,6 +1066,8 @@ git commit -m "feat(sql): extract ORDER BY in SQLParser"
 
 ### Task 10: SQLParser — LIMIT extraction
 
+**Post-hoc note (Task 10's code quality review, last of the 8 extractor tasks):** the `except (TypeError, ValueError, AttributeError)` branch is real and reachable — Oracle's `FETCH FIRST N ROWS ONLY` parses to `exp.Fetch`, whose `.expression` property returns `None` (count is stored under a different key), so `.expression.this` raises `AttributeError`. Not an issue for this project's target dialects (postgres/mysql/sqlite/duckdb, all of which parse `LIMIT n` as `exp.Limit`). A regression test (`test_extract_limit_fetch_first_syntax_not_captured`) and a precision fix to the explanatory comment were added during review.
+
 **Files:**
 - Modify: `src/sql/parser.py`
 - Test: `tests/test_sql_parser.py`
@@ -1160,6 +1200,8 @@ git commit -m "feat(sql): add AliasResolver"
 ---
 
 ### Task 12: Wire alias resolution into SQLParser.parse()
+
+**Post-hoc note (Task 12's code quality review, the highest-risk task so far):** the plan's own test-update prediction (3 tests) undercounted the actual blast radius — `_resolve_aliases` touches `select_columns`, `group_by`, `filters`, and `aggregations`, so 8 tests needed `table=` updates, not 3. All hardened assertions from earlier tasks (dedup counts, `join_type`, etc.) were preserved. Review also found a real, silent bug: `_resolve_aliases` builds one flat alias→table map across the WHOLE tree including subqueries, so a reused alias letter (e.g. `a`) in a subquery overwrites the outer scope's mapping, silently resolving outer columns to the wrong table. This mirrors the flat, scope-unaware traversal already used by every other extractor in the file (all 8 flatten across subquery boundaries) — a real fix requires scope-aware traversal throughout the class, out of scope for this task. Documented with a comment (matching the other 5 known-limitation comments) and a regression test that locks in current behavior rather than attempting a fix.
 
 **Why:** `_extract_columns`/`_extract_joins`/`_extract_group_by` currently put the raw alias (`"c"`) in `ColumnReference.table`, not the real table name (`"customers"`). `SQLSchemaValidator` (Task 13) needs real table names to check against `DatabaseSchema`.
 
@@ -1347,6 +1389,8 @@ git commit -m "feat(sql): resolve table aliases to real table names in SQLParser
 
 ### Task 13: SQLSchemaValidator
 
+**Post-hoc note (Task 13's code quality review):** implementing this task's own spec test required fixing a real pre-existing bug in `src/schema/models.py::Table.get_column` — it raised `ValueError` on a missing column instead of returning `None`, so `DatabaseSchema.has_column` (which did `table.get_column(x) is not None`) could never actually return `False`, it just crashed. Fixed with a `try/except ValueError: return False` wrapper in `has_column`. Review then found a follow-on accuracy issue: `get_table`/`has_table` matched case-insensitively but `get_column`/`has_column` didn't, which could produce false-positive "Unknown column" errors on validly-cased queries — fixed by making `get_column`'s comparison case-insensitive too, matching `get_table`'s existing pattern. Both fixes are minimal, single-line changes with regression tests. Note for Task 15: `SQLSchemaValidator.validate()` only checks `.tables` and `.select_columns` — `.joins`/`.filters`/`.aggregations`/`.group_by` are unchecked and unqualified columns are silently skipped, both intentionally scoped out and documented in-code, not oversights.
+
 **Files:**
 - Modify: `src/schema/validator.py`
 - Test: `tests/test_schema_validator.py`
@@ -1515,6 +1559,8 @@ git commit -m "feat(schema): add SQLSchemaValidator for cross-checking SQL again
 ---
 
 ### Task 14: Pipeline script — build_structured_dataset.py
+
+**Post-hoc note (Task 14's code quality review):** ran successfully end-to-end against all 6 real records in `data/processed/normalized.jsonl` (dialect `duckdb`, multi-table schemas with foreign keys) — no crashes, validating the 8 extractors + alias resolution against real (if synthetic) data, not just hand-crafted unit fixtures. Review found `main()` had no per-record error handling (one bad record would crash the whole run, losing all output) — fixed to match the established try/except-per-record + counter + summary pattern already used by the sibling `scripts/build_normalized_dataset.py`. A separate reviewer observation that `select_columns`/`aggregations` contain WHERE-clause columns and duplicates was correctly identified as a false alarm — that's the intentional, already-tested broad-sweep/no-dedup design from Tasks 4 and 7, not a new bug. Also confirmed (pre-existing, out of scope): `python scripts/*.py` direct invocation fails without `PYTHONPATH=.` repo-wide — affects `build_normalized_dataset.py` too, not introduced here.
 
 **Files:**
 - Modify: `scripts/build_structured_dataset.py` (currently empty)
@@ -1735,6 +1781,8 @@ git commit -m "test: add Phase 2 end-to-end schema+SQL integration test"
 ---
 
 ### Task 16: Full Phase-2 test suite run
+
+**Result:** all 43 Phase-2 tests pass; full repo suite (`tests/`) is 138 passed, 0 failed — no regressions in Phase 1 (data_pipeline, adapters, validation, split) or anywhere else.
 
 **Files:** none (verification only)
 
