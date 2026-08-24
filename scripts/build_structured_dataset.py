@@ -4,6 +4,7 @@ from pathlib import Path
 
 from src.schema.parser import SchemaParser
 from src.schema.serializer import schema_to_dict
+from src.schema.validator import SQLSchemaValidator
 from src.sql.parser import SQLParser
 
 
@@ -25,9 +26,12 @@ def transform_record(record: dict) -> dict:
 
     sql_structure = SQLParser(dialect=dialect).parse(sql)
 
+    validation_errors = SQLSchemaValidator(schema).validate(sql_structure)
+
     output = dict(record)
     output["schema"] = schema_to_dict(schema)
     output["sql_structure"] = asdict(sql_structure)
+    output["validation_errors"] = validation_errors
 
     return output
 
