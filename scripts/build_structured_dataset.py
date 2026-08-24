@@ -36,17 +36,29 @@ def main():
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 
+    processed = 0
+    failed = 0
+
     with (
         INPUT.open("r", encoding="utf-8") as source,
         OUTPUT.open("w", encoding="utf-8") as target,
     ):
 
-        for line in source:
+        for index, line in enumerate(source):
 
             record = json.loads(line)
-            output = transform_record(record)
+
+            try:
+                output = transform_record(record)
+            except Exception as e:
+                print(f"Failed record {index} (id={record.get('id')}): {e}")
+                failed += 1
+                continue
 
             target.write(json.dumps(output, ensure_ascii=False) + "\n")
+            processed += 1
+
+    print(f"Wrote {processed} records to {OUTPUT} ({failed} failed)")
 
 
 if __name__ == "__main__":
