@@ -28,13 +28,11 @@ class SQLParser:
         return result
 
     def _extract_tables(self, expression, result):
-        # CTE aliases (WITH x AS (...)) are represented as exp.Table nodes
-        # wherever they're referenced in the outer query, indistinguishable
-        # from a real table by node type alone. They're query-local names,
-        # never present in a DDL-derived schema, so they're excluded here.
-        # SQL's own CTE shadowing semantics mean this is correct even when a
-        # CTE reuses a real table's name (e.g. WITH orders AS (...) SELECT
-        # * FROM orders) — the reference means the CTE, not the real table.
+        # CTE names (WITH x AS (...)) are query-local aliases, not real
+        # tables, so they're excluded here. A Table node inside a CTE's own
+        # body that shares that CTE's name refers to the real table (per
+        # standard non-recursive SQL semantics — the CTE name isn't visible
+        # inside its own definition), so it's kept rather than excluded.
 
         cte_names = {cte.alias_or_name for cte in expression.find_all(exp.CTE)}
 
@@ -43,7 +41,13 @@ class SQLParser:
             name = table.name
 
             if name in cte_names:
-                continue
+                enclosing_cte = table.find_ancestor(exp.CTE)
+                is_self_reference = (
+                    enclosing_cte is not None
+                    and enclosing_cte.alias_or_name == name
+                )
+                if not is_self_reference:
+                    continue
 
             if name not in result.tables:
                 result.tables.append(name)
@@ -227,6 +231,14 @@ class SQLParser:
         # to the real underlying table name (e.g. "customers"), across every
         # extractor's output. result.tables is untouched — _extract_tables
         # already stores real names (table.name), never aliases.
+        #
+        # Known limitation: this has no knowledge of CTE names (see
+        # _extract_tables's cte_names) — a QUALIFIED column reference to a
+        # CTE (e.g. "SELECT recent.customer_id FROM recent") still resolves
+        # `table` to the CTE's name, which SQLSchemaValidator then flags as
+        # an unknown COLUMN rather than the (already-fixed) unknown TABLE
+        # error. The false positive is converted, not eliminated, for this
+        # narrower case.
         #
         # Known limitation: this builds one flat alias->table map across the
         # WHOLE expression tree, including subqueries, rather than resolving

@@ -467,3 +467,19 @@ def test_extract_tables_excludes_cte_names():
     result = parser.parse(sql)
 
     assert result.tables == ["orders"]
+
+
+def test_extract_tables_self_referencing_shadowed_cte():
+
+    sql = """
+    WITH orders AS (
+        SELECT id, amount FROM orders WHERE amount > 100
+    )
+    SELECT * FROM orders
+    """
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert result.tables == ["orders"]
