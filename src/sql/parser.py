@@ -28,10 +28,22 @@ class SQLParser:
         return result
 
     def _extract_tables(self, expression, result):
+        # CTE aliases (WITH x AS (...)) are represented as exp.Table nodes
+        # wherever they're referenced in the outer query, indistinguishable
+        # from a real table by node type alone. They're query-local names,
+        # never present in a DDL-derived schema, so they're excluded here.
+        # SQL's own CTE shadowing semantics mean this is correct even when a
+        # CTE reuses a real table's name (e.g. WITH orders AS (...) SELECT
+        # * FROM orders) — the reference means the CTE, not the real table.
+
+        cte_names = {cte.alias_or_name for cte in expression.find_all(exp.CTE)}
 
         for table in expression.find_all(exp.Table):
 
             name = table.name
+
+            if name in cte_names:
+                continue
 
             if name not in result.tables:
                 result.tables.append(name)

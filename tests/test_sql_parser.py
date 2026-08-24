@@ -451,3 +451,19 @@ def test_alias_resolution_subquery_alias_collision_known_limitation():
     # to assert table="foo" instead.
     id_ref = next(r for r in result.select_columns if r.column == "id")
     assert id_ref.table == "bar"
+
+
+def test_extract_tables_excludes_cte_names():
+
+    sql = """
+    WITH recent AS (
+        SELECT customer_id, amount FROM orders WHERE amount > 100
+    )
+    SELECT customer_id FROM recent
+    """
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert result.tables == ["orders"]
