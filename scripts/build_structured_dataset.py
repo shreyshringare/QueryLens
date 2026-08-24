@@ -26,6 +26,10 @@ def transform_record(record: dict) -> dict:
 
     sql_structure = SQLParser(dialect=dialect).parse(sql)
 
+    # Coarse check only: catches unknown tables and unknown qualified
+    # columns in the SELECT list. Does not check joins/filters/aggregations/
+    # group_by, and silently skips unqualified column references — see
+    # SQLSchemaValidator's own docstring-comment for the full scope.
     validation_errors = SQLSchemaValidator(schema).validate(sql_structure)
 
     output = dict(record)

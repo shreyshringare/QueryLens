@@ -63,3 +63,22 @@ def test_transform_record_flags_schema_sql_mismatch():
     output = transform_record(record)
 
     assert output["validation_errors"] == ["Unknown table: orders"]
+
+
+def test_transform_record_flags_unknown_qualified_column():
+
+    record = {
+        "id": "2",
+        "source": "synthetic",
+        "domain": "general",
+        "dialect": "sqlite",
+        "database_id": "shop",
+        "nl_question": "List customer names",
+        "ground_truth_sql": "SELECT customers.naame FROM customers",
+        "ddl": "CREATE TABLE customers (customer_id INTEGER PRIMARY KEY, name TEXT);",
+        "metadata": {},
+    }
+
+    output = transform_record(record)
+
+    assert output["validation_errors"] == ["Unknown column: customers.naame"]
