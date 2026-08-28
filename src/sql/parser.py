@@ -66,10 +66,9 @@ class SQLParser:
             )
 
     def _extract_joins(self, expression, result):
-        # Known limitations: only the first column pair in a multi-column ON
+        # Known limitation: only the first column pair in a multi-column ON
         # condition is captured (e.g. "ON a.x = b.x AND a.y = b.y" loses the
-        # second pair), and JOIN ... USING (...) produces no ON condition so
-        # such joins are silently skipped entirely.
+        # second pair).
 
         for join in expression.find_all(exp.Join):
 
@@ -78,28 +77,50 @@ class SQLParser:
             if not isinstance(table, exp.Table):
                 continue
 
+            join_type = " ".join(
+                part for part in (join.args.get("side"), join.args.get("kind")) if part
+            ) or "JOIN"
+
             condition = join.args.get("on")
 
-            if condition is None:
-                continue
+            if condition is not None:
 
-            columns = list(condition.find_all(exp.Column))
+                columns = list(condition.find_all(exp.Column))
 
-            if len(columns) < 2:
-                continue
+                if len(columns) < 2:
+                    continue
 
-            left, right = columns[0], columns[1]
+                left, right = columns[0], columns[1]
 
-            result.joins.append(
-                Join(
-                    join_type=" ".join(
-                        part for part in (join.args.get("side"), join.args.get("kind")) if part
-                    ) or "JOIN",
-                    table=table.name,
-                    left=ColumnReference(table=left.table or None, column=left.name),
-                    right=ColumnReference(table=right.table or None, column=right.name),
+                result.joins.append(
+                    Join(
+                        join_type=join_type,
+                        table=table.name,
+                        left=ColumnReference(table=left.table or None, column=left.name),
+                        right=ColumnReference(table=right.table or None, column=right.name),
+                    )
                 )
-            )
+                continue
+
+            using = join.args.get("using")
+
+            if using is None:
+                continue
+
+            # USING (col, ...) implies the same column name on both sides,
+            # but sqlglot's Identifier nodes carry no table qualifier, and
+            # the "preceding" (left-hand) table isn't tracked here — so
+            # left.table is left as None (unresolved) rather than guessed.
+            for identifier in using:
+
+                result.joins.append(
+                    Join(
+                        join_type=join_type,
+                        table=table.name,
+                        left=ColumnReference(table=None, column=identifier.name),
+                        right=ColumnReference(table=table.name, column=identifier.name),
+                    )
+                )
 
     def _extract_filters(self, expression, result):
 

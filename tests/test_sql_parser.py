@@ -136,6 +136,47 @@ def test_extract_joins_left_join_type():
     assert result.joins[0].join_type == "LEFT"
 
 
+def test_extract_joins_using_clause():
+
+    sql = """
+    SELECT *
+    FROM customers c
+    JOIN orders o
+        USING (customer_id)
+    """
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert len(result.joins) == 1
+
+    join = result.joins[0]
+
+    assert join.table == "orders"
+    assert join.join_type == "JOIN"
+    assert join.left == ColumnReference(table=None, column="customer_id")
+    assert join.right == ColumnReference(table="orders", column="customer_id")
+
+
+def test_extract_joins_using_clause_multiple_columns():
+
+    sql = """
+    SELECT *
+    FROM order_items oi
+    JOIN orders o
+        USING (order_id, region_id)
+    """
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert len(result.joins) == 2
+    assert {j.left.column for j in result.joins} == {"order_id", "region_id"}
+    assert all(j.table == "orders" for j in result.joins)
+
+
 def test_extract_filters():
 
     sql = """
