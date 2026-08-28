@@ -44,3 +44,4 @@ class SQLStructure:
     group_by: list[ColumnReference] = field(default_factory=list)
     order_by: list[OrderBy] = field(default_factory=list)
     limit: int | None = None
+    cte_names: list[str] = field(default_factory=list)

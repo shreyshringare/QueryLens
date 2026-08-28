@@ -46,6 +46,8 @@ class SQLSchemaValidator:
 
         errors = []
 
+        cte_names = {name.lower() for name in sql_structure.cte_names}
+
         for table_name in sql_structure.tables:
 
             if not self.schema.has_table(table_name):
@@ -57,6 +59,13 @@ class SQLSchemaValidator:
             # a table name we cannot know which table's column set to check
             # against, so they are silently skipped rather than flagged.
             if reference.table is None:
+                continue
+
+            # A column qualified by a CTE name (e.g. "recent.customer_id")
+            # refers to a query-local result set, not a real schema table,
+            # so it can't be checked against DatabaseSchema and is skipped
+            # rather than reported as an unknown column.
+            if reference.table.lower() in cte_names:
                 continue
 
             if not self.schema.has_column(reference.table, reference.column):

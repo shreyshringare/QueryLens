@@ -483,3 +483,30 @@ def test_extract_tables_self_referencing_shadowed_cte():
     result = parser.parse(sql)
 
     assert result.tables == ["orders"]
+
+
+def test_extract_tables_records_cte_names():
+
+    sql = """
+    WITH recent AS (
+        SELECT customer_id, amount FROM orders WHERE amount > 100
+    )
+    SELECT recent.customer_id FROM recent
+    """
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert result.cte_names == ["recent"]
+
+
+def test_extract_tables_no_cte_names_when_absent():
+
+    sql = "SELECT * FROM orders o"
+
+    parser = SQLParser(dialect="sqlite")
+
+    result = parser.parse(sql)
+
+    assert result.cte_names == []

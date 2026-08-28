@@ -36,6 +36,8 @@ class SQLParser:
 
         cte_names = {cte.alias_or_name for cte in expression.find_all(exp.CTE)}
 
+        result.cte_names = sorted(cte_names)
+
         for table in expression.find_all(exp.Table):
 
             name = table.name

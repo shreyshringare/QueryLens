@@ -152,3 +152,20 @@ def test_sql_schema_validator_column_lookup_is_case_insensitive():
     errors = validator.validate(structure)
 
     assert errors == []
+
+
+def test_sql_schema_validator_skips_columns_qualified_by_cte():
+
+    schema = _build_shop_schema()
+
+    structure = SQLStructure(
+        tables=[],
+        cte_names=["recent"],
+        select_columns=[ColumnReference(table="recent", column="customer_id")],
+    )
+
+    validator = SQLSchemaValidator(schema)
+
+    errors = validator.validate(structure)
+
+    assert errors == []
