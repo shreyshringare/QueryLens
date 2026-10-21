@@ -149,3 +149,34 @@ def test_select_includes_all_foreign_keys_on_multi_fk_table():
 
 def test_agents_package_exports():
     from src.agents import ColumnScore, SchemaLinker  # noqa: F401
+
+
+from src.agents.evaluation import recall_at_k
+
+
+def _users_schema() -> DatabaseSchema:
+
+    users = Table(
+        name="users",
+        columns=[
+            Column(name="email", data_type="TEXT"),
+            Column(name="age", data_type="INT"),
+        ],
+    )
+
+    return DatabaseSchema(database_id="demo", tables=[users])
+
+
+def test_recall_at_k_computes_fraction_of_fully_covered_cases():
+
+    schema = _users_schema()
+    question = "What is the user's email address?"
+
+    cases = [
+        (schema, question, [("users", "email")]),  # hits @ top_k=1
+        (schema, question, [("users", "age")]),     # misses @ top_k=1
+    ]
+
+    fraction = recall_at_k(cases, _LINKER, top_k=1)
+
+    assert fraction == 0.5
