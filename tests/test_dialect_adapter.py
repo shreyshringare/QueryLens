@@ -1,18 +1,25 @@
-from src.dialect.models import AdaptResult
+from src.dialect.adapter import DialectAdapter
 
 
-def test_adapt_result_holds_values():
+def test_adapt_rejects_unknown_source_dialect():
 
-    result = AdaptResult(
-        sql="SELECT 1",
-        success=True,
-        error=None,
-        source_dialect="postgresql",
-        target_dialect="mysql",
-    )
+    adapter = DialectAdapter()
 
-    assert result.sql == "SELECT 1"
-    assert result.success is True
-    assert result.error is None
-    assert result.source_dialect == "postgresql"
-    assert result.target_dialect == "mysql"
+    result = adapter.adapt("SELECT 1", source_dialect="oracle", target_dialect="postgresql")
+
+    assert result.success is False
+    assert result.sql is None
+    assert "oracle" in result.error
+    assert result.source_dialect == "oracle"
+    assert result.target_dialect == "postgresql"
+
+
+def test_adapt_rejects_unknown_target_dialect():
+
+    adapter = DialectAdapter()
+
+    result = adapter.adapt("SELECT 1", source_dialect="postgresql", target_dialect="unknown")
+
+    assert result.success is False
+    assert result.sql is None
+    assert "unknown" in result.error
