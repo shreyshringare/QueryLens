@@ -1,5 +1,5 @@
 import sqlglot
-from sqlglot.errors import ErrorLevel
+from sqlglot.errors import ErrorLevel, SqlglotError
 
 from .models import AdaptResult
 
@@ -51,12 +51,21 @@ class DialectAdapter:
         # would never notice. RAISE converts that into a catchable
         # UnsupportedError so a broken transpile can never silently reach
         # the execution agent.
-        statements = sqlglot.transpile(
-            sql,
-            read=resolved_source,
-            write=resolved_target,
-            unsupported_level=ErrorLevel.RAISE,
-        )
+        try:
+            statements = sqlglot.transpile(
+                sql,
+                read=resolved_source,
+                write=resolved_target,
+                unsupported_level=ErrorLevel.RAISE,
+            )
+        except SqlglotError as exc:
+            return AdaptResult(
+                sql=None,
+                success=False,
+                error=str(exc),
+                source_dialect=source_dialect,
+                target_dialect=target_dialect,
+            )
 
         return AdaptResult(
             sql="; ".join(statements),

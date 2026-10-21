@@ -56,3 +56,19 @@ def test_adapt_transpiles_concat_postgresql_to_mysql():
     assert result.success is True
     assert result.error is None
     assert result.sql == "SELECT CONCAT(a, b) FROM t"
+
+
+def test_adapt_catches_invalid_sql():
+
+    adapter = DialectAdapter()
+
+    result = adapter.adapt(
+        "SELECT FROM FROM",
+        source_dialect="sqlite",
+        target_dialect="postgresql",
+    )
+
+    assert result.success is False
+    assert result.sql is None
+    assert result.error is not None
+    assert len(result.error) > 0
