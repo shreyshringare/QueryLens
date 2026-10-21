@@ -1,4 +1,3 @@
-# src/dialect/adapter.py
 import sqlglot
 from sqlglot.errors import ErrorLevel
 
@@ -7,6 +6,12 @@ from .models import AdaptResult
 
 class DialectAdapter:
 
+    # Maps the project's canonical dialect names (src/data_pipeline/dialects.py
+    # ::SUPPORTED_DIALECTS) to sqlglot's own dialect keys. sqlglot has no
+    # "postgresql" alias and raises ValueError if given one directly — this
+    # map exists specifically to prevent that crash. "unknown" (the pipeline's
+    # sentinel for unrecognized dialects) is intentionally absent: any name
+    # not in this map is unresolvable and short-circuits before any sqlglot call.
     CANONICAL_TO_SQLGLOT = {
         "postgresql": "postgres",
         "mysql": "mysql",
@@ -40,10 +45,12 @@ class DialectAdapter:
                 target_dialect=target_dialect,
             )
 
-        # unsupported_level=RAISE: sqlglot's default silently embeds a warning
-        # comment in the output SQL for unsupported constructs instead of
-        # failing. RAISE converts that into a catchable UnsupportedError so a
-        # broken transpile can never silently reach the execution agent.
+        # unsupported_level=RAISE: sqlglot's default (WARN) only logs a
+        # warning via Python's logging module and still returns the
+        # (possibly degraded) SQL — a caller checking only the return value
+        # would never notice. RAISE converts that into a catchable
+        # UnsupportedError so a broken transpile can never silently reach
+        # the execution agent.
         statements = sqlglot.transpile(
             sql,
             read=resolved_source,
