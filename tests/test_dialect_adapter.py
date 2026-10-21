@@ -86,3 +86,7 @@ def test_adapt_same_dialect_round_trip():
 
     assert result.success is True
     assert result.sql == "SELECT a, b FROM t WHERE a > 1"
+
+
+def test_dialect_package_exports():
+    from src.dialect import AdaptResult, DialectAdapter  # noqa: F401
