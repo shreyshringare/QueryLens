@@ -106,7 +106,23 @@ def test_select_prunes_to_top_k_columns_and_their_tables():
     assert table_names == {"customers", "orders", "products"}
 
     orders_table = pruned.get_table("orders")
-    assert {column.name for column in orders_table.columns} == {"customer_id"}
+    assert {column.name for column in orders_table.columns} == {"customer_id", "order_id"}
 
     products_table = pruned.get_table("products")
-    assert {column.name for column in products_table.columns} == {"price"}
+    assert {column.name for column in products_table.columns} == {"price", "product_id"}
+
+
+def test_select_includes_primary_key_even_when_not_top_ranked():
+
+    schema = _ecommerce_schema()
+
+    pruned = _LINKER.select(
+        "How many orders has each customer placed?",
+        schema,
+        top_k=1,
+    )
+
+    assert {table.name for table in pruned.tables} == {"orders"}
+
+    orders_table = pruned.get_table("orders")
+    assert {column.name for column in orders_table.columns} == {"customer_id", "order_id"}

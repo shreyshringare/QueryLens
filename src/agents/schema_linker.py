@@ -47,6 +47,22 @@ class SchemaLinker:
         for item in top:
             selected_columns.setdefault(item.table, set()).add(item.column)
 
+        # Auto-include primary/foreign keys of every selected table, even if the
+        # cross-encoder didn't rank them in the top-k — otherwise a pruned-away
+        # FK/PK column would make SQLSchemaValidator flag false "unknown column"
+        # errors on an otherwise-valid join once SQL referencing it is generated.
+        for table in schema.tables:
+
+            if table.name not in selected_columns:
+                continue
+
+            for column in table.columns:
+                if column.primary_key:
+                    selected_columns[table.name].add(column.name)
+
+            for foreign_key in table.foreign_keys:
+                selected_columns[table.name].add(foreign_key.column)
+
         pruned_tables = []
 
         for table in schema.tables:
@@ -56,7 +72,10 @@ class SchemaLinker:
 
             kept_names = selected_columns[table.name]
             kept_columns = [column for column in table.columns if column.name in kept_names]
+            kept_foreign_keys = [fk for fk in table.foreign_keys if fk.column in kept_names]
 
-            pruned_tables.append(Table(name=table.name, columns=kept_columns, foreign_keys=[]))
+            pruned_tables.append(
+                Table(name=table.name, columns=kept_columns, foreign_keys=kept_foreign_keys)
+            )
 
         return DatabaseSchema(database_id=schema.database_id, tables=pruned_tables)
