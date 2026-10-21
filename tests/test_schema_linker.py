@@ -145,3 +145,7 @@ def test_select_includes_all_foreign_keys_on_multi_fk_table():
 
     order_items_fks = {(fk.column, fk.referenced_table) for fk in order_items_table.foreign_keys}
     assert order_items_fks == {("order_id", "orders"), ("product_id", "products")}
+
+
+def test_agents_package_exports():
+    from src.agents import ColumnScore, SchemaLinker  # noqa: F401
