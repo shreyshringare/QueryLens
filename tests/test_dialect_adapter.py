@@ -79,7 +79,7 @@ def test_adapt_same_dialect_round_trip():
     adapter = DialectAdapter()
 
     result = adapter.adapt(
-        "SELECT a, b FROM t WHERE a > 1",
+        "select a,b from t where a>1",
         source_dialect="duckdb",
         target_dialect="duckdb",
     )
