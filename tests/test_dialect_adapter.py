@@ -41,3 +41,18 @@ def test_adapt_rejects_unknown_target_dialect():
     assert result.success is False
     assert result.sql is None
     assert "unknown" in result.error
+
+
+def test_adapt_transpiles_concat_postgresql_to_mysql():
+
+    adapter = DialectAdapter()
+
+    result = adapter.adapt(
+        "SELECT a || b FROM t",
+        source_dialect="postgresql",
+        target_dialect="mysql",
+    )
+
+    assert result.success is True
+    assert result.error is None
+    assert result.sql == "SELECT CONCAT(a, b) FROM t"
