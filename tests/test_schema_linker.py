@@ -126,3 +126,22 @@ def test_select_includes_primary_key_even_when_not_top_ranked():
 
     orders_table = pruned.get_table("orders")
     assert {column.name for column in orders_table.columns} == {"customer_id", "order_id"}
+
+
+def test_select_includes_all_foreign_keys_on_multi_fk_table():
+
+    schema = _ecommerce_schema()
+
+    pruned = _LINKER.select(
+        "Which customers have spent more than 500 dollars?",
+        schema,
+        top_k=10,
+    )
+
+    assert {table.name for table in pruned.tables} == {"customers", "order_items", "orders", "products"}
+
+    order_items_table = pruned.get_table("order_items")
+    assert {column.name for column in order_items_table.columns} == {"order_id", "product_id", "quantity"}
+
+    order_items_fks = {(fk.column, fk.referenced_table) for fk in order_items_table.foreign_keys}
+    assert order_items_fks == {("order_id", "orders"), ("product_id", "products")}

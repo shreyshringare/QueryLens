@@ -51,6 +51,12 @@ class SchemaLinker:
         # cross-encoder didn't rank them in the top-k — otherwise a pruned-away
         # FK/PK column would make SQLSchemaValidator flag false "unknown column"
         # errors on an otherwise-valid join once SQL referencing it is generated.
+        # Known, spec'd limitation: this only preserves a SELECTED table's own
+        # PK/FK columns — it does NOT pull in a new table that an FK points to.
+        # A selected table's FK column can end up referencing a table absent
+        # from the pruned schema (e.g. orders.customer_id survives even if
+        # customers wasn't independently selected). Acceptable for this phase;
+        # revisit if a downstream consumer needs full referential closure.
         for table in schema.tables:
 
             if table.name not in selected_columns:
@@ -60,8 +66,8 @@ class SchemaLinker:
                 if column.primary_key:
                     selected_columns[table.name].add(column.name)
 
-            for foreign_key in table.foreign_keys:
-                selected_columns[table.name].add(foreign_key.column)
+            for fk in table.foreign_keys:
+                selected_columns[table.name].add(fk.column)
 
         pruned_tables = []
 
@@ -72,7 +78,7 @@ class SchemaLinker:
 
             kept_names = selected_columns[table.name]
             kept_columns = [column for column in table.columns if column.name in kept_names]
-            kept_foreign_keys = [fk for fk in table.foreign_keys if fk.column in kept_names]
+            kept_foreign_keys = list(table.foreign_keys)
 
             pruned_tables.append(
                 Table(name=table.name, columns=kept_columns, foreign_keys=kept_foreign_keys)
