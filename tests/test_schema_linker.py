@@ -180,3 +180,60 @@ def test_recall_at_k_computes_fraction_of_fully_covered_cases():
     fraction = recall_at_k(cases, _LINKER, top_k=1)
 
     assert fraction == 0.5
+
+
+def test_recall_at_3_on_real_structured_dataset_records():
+
+    schema = _ecommerce_schema()
+
+    cases = [
+        (
+            schema,
+            "Which customers are from India?",
+            [("customers", "customer_id"), ("customers", "name"), ("customers", "country")],
+        ),
+        (
+            schema,
+            "What is the average product price?",
+            [("products", "price")],
+        ),
+        (
+            schema,
+            "Which products cost more than 100 dollars?",
+            [("products", "name"), ("products", "price")],
+        ),
+        (
+            schema,
+            "How many orders has each customer placed?",
+            [("orders", "customer_id")],
+        ),
+        (
+            schema,
+            "Which customers have spent more than 500 dollars?",
+            [
+                ("orders", "customer_id"),
+                ("orders", "order_id"),
+                ("order_items", "order_id"),
+                ("order_items", "product_id"),
+                ("products", "product_id"),
+                ("order_items", "quantity"),
+                ("products", "price"),
+            ],
+        ),
+        (
+            schema,
+            "Which products have never been ordered?",
+            [("products", "product_id"), ("products", "name"), ("order_items", "product_id")],
+        ),
+    ]
+
+    fraction = recall_at_k(cases, _LINKER, top_k=3)
+
+    # Measured, not asserted-to-be-80%: 3 of 6 real records have all their
+    # ground-truth columns inside the top-3 ranked columns (records 0, 1, 3
+    # hit; records 2, 4, 5 miss — record 4 in particular needs 7 ground-truth
+    # columns across 3 tables, impossible to fully cover at top_k=3). This is
+    # expected for a zero-shot, untrained model on 6 records — see the Task 7
+    # docstring-equivalent note in the plan for why this isn't the CLAUDE.md
+    # gate being claimed as met.
+    assert fraction == 3 / 6
