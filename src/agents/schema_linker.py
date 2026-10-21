@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from sentence_transformers import CrossEncoder
 
-from src.schema.models import DatabaseSchema
+from src.schema.models import DatabaseSchema, Table
 
 
 @dataclass
@@ -37,3 +37,26 @@ class SchemaLinker:
         results.sort(key=lambda item: item.score, reverse=True)
 
         return results
+
+    def select(self, question: str, schema: DatabaseSchema, top_k: int = 3) -> DatabaseSchema:
+
+        top = self.rank(question, schema)[:top_k]
+
+        selected_columns: dict[str, set[str]] = {}
+
+        for item in top:
+            selected_columns.setdefault(item.table, set()).add(item.column)
+
+        pruned_tables = []
+
+        for table in schema.tables:
+
+            if table.name not in selected_columns:
+                continue
+
+            kept_names = selected_columns[table.name]
+            kept_columns = [column for column in table.columns if column.name in kept_names]
+
+            pruned_tables.append(Table(name=table.name, columns=kept_columns, foreign_keys=[]))
+
+        return DatabaseSchema(database_id=schema.database_id, tables=pruned_tables)

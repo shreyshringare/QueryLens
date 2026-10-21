@@ -90,3 +90,23 @@ def test_rank_orders_all_columns_by_relevance():
         ("customers", "name"),
         ("customers", "customer_id"),
     }
+
+
+def test_select_prunes_to_top_k_columns_and_their_tables():
+
+    schema = _ecommerce_schema()
+
+    pruned = _LINKER.select(
+        "Which customers have spent more than 500 dollars?",
+        schema,
+        top_k=5,
+    )
+
+    table_names = {table.name for table in pruned.tables}
+    assert table_names == {"customers", "orders", "products"}
+
+    orders_table = pruned.get_table("orders")
+    assert {column.name for column in orders_table.columns} == {"customer_id"}
+
+    products_table = pruned.get_table("products")
+    assert {column.name for column in products_table.columns} == {"price"}
