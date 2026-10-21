@@ -72,3 +72,17 @@ def test_adapt_catches_invalid_sql():
     assert result.sql is None
     assert result.error is not None
     assert len(result.error) > 0
+
+
+def test_adapt_same_dialect_round_trip():
+
+    adapter = DialectAdapter()
+
+    result = adapter.adapt(
+        "SELECT a, b FROM t WHERE a > 1",
+        source_dialect="duckdb",
+        target_dialect="duckdb",
+    )
+
+    assert result.success is True
+    assert result.sql == "SELECT a, b FROM t WHERE a > 1"
