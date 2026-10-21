@@ -13,6 +13,9 @@ sqlglot==27.14.0
 # Local SQL execution / validation
 duckdb==1.4.0
 
+# Semantic schema linking
+sentence-transformers==6.2.0
+
 # DataFrames / columnar data
 pandas==2.3.2
 polars==1.33.1
