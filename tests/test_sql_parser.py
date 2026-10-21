@@ -337,6 +337,51 @@ def test_extract_group_by_multiple_columns():
     ]
 
 
+def test_extract_group_by_rollup():
+
+    sql = "SELECT c.region, c.name, COUNT(*) FROM customers c GROUP BY ROLLUP(c.region, c.name)"
+
+    parser = SQLParser(dialect="postgres")
+
+    result = parser.parse(sql)
+
+    assert result.group_by == [
+        ColumnReference(table="customers", column="region"),
+        ColumnReference(table="customers", column="name"),
+    ]
+
+
+def test_extract_group_by_cube():
+
+    sql = "SELECT c.region, c.name, COUNT(*) FROM customers c GROUP BY CUBE(c.region, c.name)"
+
+    parser = SQLParser(dialect="postgres")
+
+    result = parser.parse(sql)
+
+    assert result.group_by == [
+        ColumnReference(table="customers", column="region"),
+        ColumnReference(table="customers", column="name"),
+    ]
+
+
+def test_extract_group_by_grouping_sets():
+
+    sql = (
+        "SELECT c.region, c.name, COUNT(*) FROM customers c "
+        "GROUP BY GROUPING SETS ((c.region), (c.name))"
+    )
+
+    parser = SQLParser(dialect="postgres")
+
+    result = parser.parse(sql)
+
+    assert result.group_by == [
+        ColumnReference(table="customers", column="region"),
+        ColumnReference(table="customers", column="name"),
+    ]
+
+
 def test_extract_order_by():
 
     sql = "SELECT * FROM orders o ORDER BY o.amount DESC"

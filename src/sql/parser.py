@@ -188,12 +188,8 @@ class SQLParser:
             )
 
     def _extract_group_by(self, expression, result):
-        # Known limitation: GROUP BY ROLLUP(...)/CUBE(...)/GROUPING SETS (...)
-        # store their columns under separate Group args ("rollup", "cube",
-        # "grouping_sets") rather than in group.expressions, so those variants
-        # are silently skipped here — group_by comes back empty for them.
-        # Ordinal GROUP BY (e.g. "GROUP BY 1") is also a no-op by design: the
-        # item is a bare Literal with no Column descendants to find.
+        # Ordinal GROUP BY (e.g. "GROUP BY 1") is a no-op by design: the item
+        # is a bare Literal with no Column descendants to find.
 
         group = expression.args.get("group")
 
@@ -207,6 +203,18 @@ class SQLParser:
                 result.group_by.append(
                     ColumnReference(table=column.table or None, column=column.name)
                 )
+
+        # ROLLUP(...)/CUBE(...)/GROUPING SETS (...) store their columns under
+        # separate Group args rather than in group.expressions.
+        for key in ("rollup", "cube", "grouping_sets"):
+
+            for node in group.args.get(key) or []:
+
+                for column in node.find_all(exp.Column):
+
+                    result.group_by.append(
+                        ColumnReference(table=column.table or None, column=column.name)
+                    )
 
     def _extract_order_by(self, expression, result):
         # Known limitation: NULLS FIRST/NULLS LAST is parsed by sqlglot into a
