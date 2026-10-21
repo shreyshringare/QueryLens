@@ -1,3 +1,5 @@
+import pytest
+
 from src.dialect.models import AdaptResult
 from src.dialect.adapter import DialectAdapter
 
@@ -90,9 +92,6 @@ def test_adapt_same_dialect_round_trip():
 
 def test_dialect_package_exports():
     from src.dialect import AdaptResult, DialectAdapter  # noqa: F401
-
-
-import pytest
 
 
 CROSS_DIALECT_CASES = [
