@@ -2,7 +2,7 @@
 
 **QueryLens** is a modular, database-agnostic Text-to-SQL data and evaluation pipeline. It ingests heterogeneous Text-to-SQL datasets such as **Spider, BIRD, and Synthetic**, normalizes them into a common representation, extracts structured database schemas and SQL structure, and prepares the data for later schema-linking and SQL-generation stages.
 
-> **Current status:** Phase 1 — Dataset Ingestion & Normalization is being completed; Phase 2 — Schema Understanding & SQL Representation is the current development phase.
+> **Current status:** Phase 1 (Dataset Ingestion & Normalization) and Phase 2 (Schema Understanding, SQL Representation, Schema↔SQL Validation) are complete. A pretrained, zero-shot Schema Linker (cross-encoder re-ranking) and a sqlglot-based Dialect Adapter (PostgreSQL/MySQL/SQLite/DuckDB transpilation) have been added. `SQLSchemaValidator` hardening (joins/filters/aggregations/group_by column checks) is in progress. No SQL-generation model has been trained yet — schema linking and dialect adaptation currently run against pretrained/deterministic components only.
 
 ---
 
@@ -386,18 +386,63 @@ Relevant sub-schema
 
 This will be a major component of the later phases.
 
+## 10.1 Schema Linker (implemented)
+
+Schema linking is implemented as `src/agents/schema_linker.py::SchemaLinker`, using a pretrained `sentence-transformers` cross-encoder (`cross-encoder/ms-marco-MiniLM-L6-v2`) — zero-shot, no training performed or required for this component:
+
+```text
+Question + DatabaseSchema
+          ↓
+  Score every column
+  (cross-encoder re-ranking)
+          ↓
+     Take top-k columns
+          ↓
+  Add each selected table's
+  primary/foreign keys back
+  (preserves join integrity)
+          ↓
+    Pruned DatabaseSchema
+```
+
+Measured recall@3 (does the top-3 ranked columns fully cover the ground-truth columns for a question) on the 6 real labeled records currently available in `data/structured/structured.jsonl` is **3/6 (50%)** — reported honestly, not rounded up. This is expected for a zero-shot, untrained model evaluated against only 6 records; it is well short of a dataset-scale validation set. A trained schema linker (`agents/train_schema_linker.py`) and a larger labeled dataset (`data/build_schema_linker_dataset.py`) are not yet built.
+
+## 10.2 Dialect Adapter (implemented)
+
+`src/dialect/adapter.py::DialectAdapter` transpiles SQL between PostgreSQL, MySQL, SQLite, and DuckDB using `sqlglot`:
+
+```text
+SQL + source dialect + target dialect
+          ↓
+   Map canonical dialect name
+   → sqlglot dialect key
+   (sqlglot has no "postgresql"
+    alias — only "postgres")
+          ↓
+     sqlglot.transpile(...)
+          ↓
+  AdaptResult(sql, success, error)
+  — never raises; failures
+    (unknown dialect, invalid
+    SQL, unsupported construct)
+    become a failed result
+```
+
+No hardcoded dialect-quirk fixup table — an empirical probe across all 4 dialects found `sqlglot` already transpiles concat/`GROUP_CONCAT`/`STRING_AGG`/`LISTAGG`/`IFNULL`/`LIMIT`-`OFFSET`/`CAST`/`IF`-`CASE` correctly out of the box; fixups are added only if a real failure is found, not speculatively.
+
 ---
 
 # 11. Project Structure
 
-The intended structure is:
+The actual current structure (verified against the repo, not aspirational):
 
 ```text
 QueryLens/
 │
 ├── data/
 │   ├── raw/
-│   ├── normalized/
+│   │   └── synthetic/
+│   ├── schemas/
 │   ├── processed/
 │   └── structured/
 │
@@ -405,14 +450,18 @@ QueryLens/
 │   │
 │   ├── data_pipeline/
 │   │   ├── __init__.py
+│   │   ├── config.py
 │   │   ├── schema.py
 │   │   ├── models.py
 │   │   ├── loaders.py
 │   │   ├── normalizer.py
 │   │   ├── validation.py
 │   │   ├── dedup.py
+│   │   ├── split.py
+│   │   ├── stats.py
 │   │   ├── dialects.py
 │   │   ├── adapt.py
+│   │   ├── pipeline.py
 │   │   │
 │   │   └── adapters/
 │   │       ├── __init__.py
@@ -420,14 +469,35 @@ QueryLens/
 │   │       ├── bird.py
 │   │       └── synthetic.py
 │   │
-│   └── schema/
+│   ├── schema/
+│   │   ├── __init__.py
+│   │   ├── models.py
+│   │   ├── parser.py
+│   │   ├── relationships.py
+│   │   ├── relationship_graph.py
+│   │   ├── serializer.py
+│   │   └── validator.py          # SchemaValidator + SQLSchemaValidator
+│   │
+│   ├── sql/
+│   │   ├── __init__.py
+│   │   ├── models.py
+│   │   ├── parser.py              # SQLParser (tables/joins/filters/aggs/group by/order by/limit)
+│   │   └── aliases.py             # AliasResolver
+│   │
+│   ├── dialect/
+│   │   ├── __init__.py
+│   │   ├── models.py              # AdaptResult
+│   │   └── adapter.py             # DialectAdapter
+│   │
+│   └── agents/
 │       ├── __init__.py
-│       ├── models.py
-│       ├── parser.py
-│       └── serializer.py
+│       ├── schema_linker.py       # ColumnScore, SchemaLinker
+│       └── evaluation.py          # recall_at_k
 │
 ├── scripts/
 │   ├── test_loader.py
+│   ├── test_spider_normalization.py
+│   ├── create_synthetic_db.py
 │   ├── build_normalized_dataset.py
 │   └── build_structured_dataset.py
 │
@@ -440,13 +510,19 @@ QueryLens/
 │   ├── test_validation.py
 │   ├── test_dedup.py
 │   ├── test_dialects.py
-│   ├── test_ddl_parser.py
-│   ├── test_schema.py
+│   ├── test_split.py
+│   ├── test_schema_parser.py
+│   ├── test_schema_relationships.py
+│   ├── test_schema_validator.py
 │   ├── test_sql_parser.py
+│   ├── test_dialect_adapter.py
+│   ├── test_schema_linker.py
+│   ├── test_build_structured_dataset.py
+│   ├── test_pipeline_integration.py
 │   └── test_phase2_integration.py
 │
 ├── requirements.txt
-├── pytest.ini
+├── pyproject.toml
 └── README.md
 ```
 
@@ -810,26 +886,54 @@ Dataset loading              ✅
 Spark pipeline               ✅
 Synthetic loading            ✅
 Loader tests                 ✅
-Normalization                🔨
-Spider adapter               🔨
-BIRD adapter                 🔨
-Deduplication                🔨
-Dataset splitting            🔨
-Quality statistics           🔨
+Normalization                ✅
+Spider adapter               ✅
+BIRD adapter                 ✅
+Deduplication                ✅
+Dataset splitting            ✅
+Quality statistics           ✅
 
 
 PHASE 2
 ────────────────────────────────────
-Schema models                ⏳
-DDL parser                   ⏳
-Table extraction             ⏳
-Column extraction            ⏳
-Key extraction               ⏳
-Relationship graph           ⏳
-SQL parser                   ⏳
-SQL structure                ⏳
-Schema linking               ⏳
-Integration                  ⏳
+Schema models                ✅
+DDL parser                   ✅
+Table extraction             ✅
+Column extraction            ✅
+Key extraction               ✅
+Relationship graph           ✅
+SQL parser                   ✅
+SQL structure                ✅
+Schema↔SQL validation         🔨  tables + select_columns done; joins/filters/aggregations/group_by in progress
+Integration                  ✅
+
+
+SCHEMA LINKING (zero-shot, no training)
+────────────────────────────────────
+Cross-encoder ranking          ✅
+Top-k pruning + PK/FK keep     ✅
+recall@k eval helper           ✅
+Honest recall@3 on 6 records   ✅  measured 3/6 (50%), not yet the 80% gate target
+Trained linker                 ⏳  agents/train_schema_linker.py not built
+Dataset-scale val set          ⏳  data/build_schema_linker_dataset.py not built
+
+
+DIALECT ADAPTER
+────────────────────────────────────
+PG/MySQL/SQLite/DuckDB transpile ✅
+Canonical→sqlglot name mapping   ✅
+Error handling (never raises)    ✅
+23 verified cross-dialect cases  ✅
+
+
+NOT STARTED
+────────────────────────────────────
+SFT / GRPO training            ⏳
+Self-healing execution agent   ⏳
+Confidence calibrator          ⏳
+MCP server                     ⏳
+OpenTelemetry tracing          ⏳
+Held-out evaluation            ⏳
 ```
 
 ---
@@ -913,4 +1017,4 @@ The ultimate QueryLens pipeline is:
                     Evaluation
 ```
 
-**The immediate next implementation target is Phase 2's schema layer:** build `src/schema/models.py` → `parser.py` → tests, then move into SQL parsing and schema linking.
+**The immediate next implementation target is hardening `SQLSchemaValidator`:** extend cross-checking to `.joins`, `.filters`, `.aggregations`, and `.group_by` (currently only `.tables` and `.select_columns` are checked). After that: a trained (not zero-shot) schema linker, SFT/GRPO SQL generation, and the self-healing execution agent.
